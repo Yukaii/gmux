@@ -97,9 +97,6 @@ impl App {
         initial_cwd: PathBuf,
         focus: bool,
     ) -> std::io::Result<usize> {
-        if self.state.has_session() {
-            self.state.collapse_to_single_session();
-        }
         let Some(session_idx) = self.state.session_index() else {
             return self.create_session_with_options(initial_cwd, focus);
         };
@@ -110,10 +107,9 @@ impl App {
         let shell_mode = self.state.shell_mode;
         let pane_term = self.state.pane_term.clone();
         let (idx, terminal, runtime, session_id, root_pane) = {
-            let session = self
-                .state
-                .session_mut()
-                .expect("collapsed active session should exist");
+            let session = self.state.sessions.get_mut(session_idx).ok_or_else(|| {
+                std::io::Error::other("active session disappeared")
+            })?;
             let (idx, terminal, runtime) = session.create_tab(
                 rows,
                 cols,
@@ -129,7 +125,16 @@ impl App {
         self.state.terminals.insert(terminal.id.clone(), terminal);
         self.state.remove_alias_shadowed_by_new_pane(root_pane);
         if focus {
-            self.state.focus_session_tab(session_idx, idx);
+            self.state.selection = None;
+            self.state.selection_autoscroll = None;
+            self.state.pane_navigation_bias = None;
+            self.state.active_session = Some(session_idx);
+            self.state.selected_session = session_idx;
+            self.state.mark_session_dirty();
+            if let Some(ws) = self.state.sessions.get_mut(session_idx) {
+                ws.switch_tab(idx);
+            }
+            self.state.tab_scroll_follow_active = true;
             self.state.mode = Mode::Terminal;
         }
         let tab_id = self
