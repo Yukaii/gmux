@@ -450,10 +450,35 @@ impl AppState {
     pub(crate) fn focus_navigator_target(&mut self, target: NavigatorTarget) -> bool {
         match target {
             NavigatorTarget::Session { ws_idx } => {
-                if self.sessions.get(ws_idx).is_none() {
+                let Some(session) = self.sessions.get(ws_idx) else {
+                    return false;
+                };
+                if session.tabs.is_empty() {
                     return false;
                 }
-                self.focus_session(ws_idx);
+                let session_id = session.id.clone();
+                let active_tab = session.active_tab.min(session.tabs.len().saturating_sub(1));
+
+                let previous_focus = self.current_pane_focus_target();
+                let session_changed = self.active_session != Some(ws_idx);
+                self.selection = None;
+                self.selection_autoscroll = None;
+                self.pane_navigation_bias = None;
+
+                self.active_session = Some(ws_idx);
+                self.selected_session = ws_idx;
+                if session_changed {
+                    crate::logging::session_focused(&session_id);
+                }
+                self.mark_session_dirty();
+                self.ensure_session_visible(ws_idx);
+                if let Some(ws) = self.sessions.get_mut(ws_idx) {
+                    ws.switch_tab(active_tab);
+                    let tab_id = format!("{}:{}", session_id, active_tab + 1);
+                    crate::logging::tab_focused(&session_id, &tab_id);
+                }
+                self.tab_scroll_follow_active = true;
+                self.record_pane_focus_after_navigation(previous_focus);
                 self.mode = Mode::Terminal;
                 true
             }
