@@ -256,7 +256,13 @@ impl App {
         };
         self.state.remove_alias_shadowed_by_new_pane(root_pane);
         crate::logging::session_created(&session_id, root_pane.raw());
-        self.state.focus_session(session_idx);
+        self.state.active_session = Some(session_idx);
+        self.state.selected_session = session_idx;
+        self.state.selection = None;
+        self.state.selection_autoscroll = None;
+        self.state.pane_navigation_bias = None;
+        self.state.mark_session_dirty();
+        self.state.ensure_session_visible(session_idx);
         self.state.mode = Mode::Terminal;
         self.schedule_session_save();
         Ok(session_idx)
