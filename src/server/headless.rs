@@ -495,6 +495,14 @@ impl HeadlessServer {
                 crate::render_prof::event("full_render_cause.deferred_new_tab");
             }
 
+            if let Some(cwd) = self.app.state.request_new_session_cwd.take() {
+                if let Err(err) = self.app.create_additional_session(cwd) {
+                    tracing::error!(err = %err, "failed to create session from navigator");
+                }
+                needs_render = true;
+                needs_full_render = true;
+            }
+
             if self.app.state.request_reload_config {
                 self.app.state.request_reload_config = false;
                 self.reload_server_config(true);
